@@ -1,88 +1,371 @@
-# 🏗 Scaffold-ETH 2
+# 💰 BillPay Contract
 
-<h4 align="center">
-  <a href="https://docs.scaffoldeth.io">Documentation</a> |
-  <a href="https://scaffoldeth.io">Website</a>
-</h4>
+A decentralized invoice and billing management system built on Ethereum using Scaffold-ETH 2.
 
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on the Ethereum blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
+## 📋 Overview
 
-⚙️ Built using NextJS, RainbowKit, Foundry/Hardhat, Wagmi, Viem, and Typescript.
+BillPay Contract is a smart contract-based solution for managing invoices (bills) on the blockchain. It allows organizations and individuals to:
 
-- ✅ **Contract Hot Reload**: Your frontend auto-adapts to your smart contract as you edit it.
-- 🪝 **[Custom hooks](https://docs.scaffoldeth.io/hooks/)**: Collection of React hooks wrapper around [wagmi](https://wagmi.sh/) to simplify interactions with smart contracts with typescript autocompletion.
-- 🧱 [**Components**](https://docs.scaffoldeth.io/components/): Collection of common web3 components to quickly build your frontend.
-- 🔥 **Burner Wallet & Local Faucet**: Quickly test your application with a burner wallet and local faucet.
-- 🔐 **Integration with Wallet Providers**: Connect to different wallet providers and interact with the Ethereum network.
+- Create invoices with customizable payment terms
+- Accept partial and full payments
+- Withdraw collected funds
+- Cancel invoices with automatic refunds
+- Track invoice history and status
 
-![Debug Contracts tab](https://github.com/scaffold-eth/scaffold-eth-2/assets/55535804/b237af0c-5027-4849-a5c1-2e31495cccb1)
+## 🛠 Tech Stack
 
-## Requirements
+- **Smart Contracts**: Solidity ^0.8.17
+- **Framework**: Hardhat
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Web3**: Wagmi, Viem, RainbowKit
+- **Testing**: Hardhat, ethers.js, Chai
+- **Security**: OpenZeppelin Contracts (ReentrancyGuard, Ownable)
+- **UI**: Tailwind CSS, DaisyUI
 
-Before you begin, you need to install the following tools:
+## 📦 Requirements
 
-- [Node (>= v20.18.3)](https://nodejs.org/en/download/)
-- Yarn ([v1](https://classic.yarnpkg.com/en/docs/install/) or [v2+](https://yarnpkg.com/getting-started/install))
-- [Git](https://git-scm.com/downloads)
+- Node.js >= 20.18.3
+- Yarn (v1 or v2+)
+- Git
 
-## Quickstart
+## 🚀 Quick Start
 
-To get started with Scaffold-ETH 2, follow the steps below:
+### 1. Install Dependencies
 
-1. Install the latest version of Scaffold-ETH 2
-
+```bash
+yarn install
 ```
-npx create-eth@latest
-```
 
-This command will install all the necessary packages and dependencies, so it might take a while.
+### 2. Start Local Blockchain
 
-> [!NOTE]
-> You can also initialize your project with one of our extensions to add specific features or starter-kits. Learn more in our [extensions documentation](https://docs.scaffoldeth.io/extensions/).
+In the first terminal:
 
-2. Run a local network in the first terminal:
-
-```
+```bash
 yarn chain
 ```
 
-This command starts a local Ethereum network that runs on your local machine and can be used for testing and development. Learn how to [customize your network configuration](https://docs.scaffoldeth.io/quick-start/environment#1-initialize-a-local-blockchain).
+This starts a local Hardhat network on `http://localhost:8545`.
 
-3. On a second terminal, deploy the test contract:
+### 3. Deploy Contracts
 
-```
+In a second terminal:
+
+```bash
 yarn deploy
 ```
 
-This command deploys a test smart contract to the local network. You can find more information about how to customize your contract and deployment script in our [documentation](https://docs.scaffoldeth.io/quick-start/environment#2-deploy-your-smart-contract).
+This deploys the `InvoiceManager` contract to your local network. The contract address will be automatically saved to `packages/nextjs/contracts/deployedContracts.ts`.
 
-4. On a third terminal, start your NextJS app:
+### 4. Start Frontend
 
-```
+In a third terminal:
+
+```bash
 yarn start
 ```
 
-Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
+Visit `http://localhost:3000` to interact with the application.
 
-**What's next**:
+## 📝 Contract API
 
-Visit the [What's next section of our docs](https://docs.scaffoldeth.io/quick-start/environment#whats-next) to learn how to:
+### InvoiceManager Contract
 
-- Edit your smart contracts
-- Edit your deployment scripts
-- Customize your frontend
-- Edit the app config
-- Writing and running tests
-- [Setting up external services and API keys](https://docs.scaffoldeth.io/deploying/deploy-smart-contracts#configuration-of-third-party-services-for-production-grade-apps)
+#### Functions
 
-## Documentation
+**`createInvoice(address payer, uint256 amount, uint256 dueDate, string calldata metadata)`**
+- Creates a new invoice
+- `payer`: Address of the payer (use `0x0` for open invoices that anyone can pay)
+- `amount`: Invoice amount in wei
+- `dueDate`: Unix timestamp (0 for no due date)
+- `metadata`: IPFS hash, URI, or description string
+- Returns: `uint256 invoiceId`
+- Emits: `InvoiceCreated` event
 
-Visit our [docs](https://docs.scaffoldeth.io) to learn all the technical details and guides of Scaffold-ETH 2.
+**`payInvoice(uint256 invoiceId)`**
+- Pay an invoice (supports partial payments)
+- Must send ETH with the transaction
+- If overpaid, excess is stored in `pendingReturns` (pull pattern)
+- Emits: `InvoicePaid` event
 
-To know more about its features, check out our [website](https://scaffoldeth.io).
+**`withdraw(uint256 invoiceId)`**
+- Withdraw funds from a paid invoice (issuer only)
+- Transfers collected funds to the issuer
+- Emits: `InvoiceWithdrawn` event
 
-## Contributing to Scaffold-ETH 2
+**`cancelInvoice(uint256 invoiceId)`**
+- Cancel an invoice (issuer only)
+- Refunds paid amount to payer via `pendingReturns`
+- Emits: `InvoiceCancelled` event
 
-We welcome contributions to Scaffold-ETH 2!
+**`withdrawPending()`**
+- Withdraw pending returns (overpayments/refunds)
+- Pull pattern for security
 
-Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for more information and guidelines for contributing to Scaffold-ETH 2.
+**`getInvoice(uint256 invoiceId)`**
+- Get invoice data and metadata
+- Returns: `(Invoice struct, string metadata)`
+
+**`getInvoicesOfIssuer(address issuer)`**
+- Get all invoice IDs created by an issuer
+- Returns: `uint256[]`
+
+**`getInvoicesOfPayer(address payer)`**
+- Get all invoice IDs addressed to a payer
+- Returns: `uint256[]`
+
+**`getRemainingAmount(uint256 invoiceId)`**
+- Get remaining amount to be paid
+- Returns: `uint256`
+
+#### Events
+
+- `InvoiceCreated(uint256 indexed id, address indexed issuer, address indexed payer, uint256 amount)`
+- `InvoicePaid(uint256 indexed id, address indexed payer, uint256 amount, uint256 paidAmount)`
+- `InvoiceCancelled(uint256 indexed id)`
+- `InvoiceWithdrawn(uint256 indexed id, address indexed issuer, uint256 amount)`
+- `PendingReturnWithdrawn(address indexed user, uint256 amount)`
+
+#### Invoice Struct
+
+```solidity
+struct Invoice {
+    uint256 id;           // Unique invoice ID
+    address issuer;       // Address that created the invoice
+    address payer;        // Address the invoice is addressed to (0x0 = anyone can pay)
+    uint256 amount;       // Total invoice amount in wei
+    uint256 paidAmount;   // Amount already paid in wei
+    uint256 dueDate;      // Unix timestamp (0 = no due date)
+    bool cancelled;       // Whether the invoice is cancelled
+}
+```
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+yarn test
+```
+
+The test suite covers:
+- Invoice creation
+- Partial and full payments
+- Overpayment handling (pull pattern)
+- Withdrawals
+- Cancellations
+- Reentrancy protection
+- Access control
+
+## 📜 CLI Scripts
+
+### Create Invoice
+
+```bash
+# Set contract address (from deployment output)
+export INVOICE_MANAGER_ADDRESS=0x...
+
+# Create invoice
+yarn hardhat run scripts/createInvoice.ts --network localhost
+```
+
+### Pay Invoice
+
+```bash
+# Pay invoice ID 0 with 0.5 ETH
+export INVOICE_MANAGER_ADDRESS=0x...
+export INVOICE_ID=0
+export PAYMENT_AMOUNT=0.5
+
+yarn hardhat run scripts/payInvoice.ts --network localhost
+```
+
+### Withdraw Funds
+
+```bash
+# Withdraw from invoice ID 0 (issuer only)
+export INVOICE_MANAGER_ADDRESS=0x...
+export INVOICE_ID=0
+
+yarn hardhat run scripts/withdraw.ts --network localhost
+```
+
+## 🎨 Frontend Usage
+
+### View Invoices
+
+Navigate to `/invoices` to see:
+- Invoices you created (as issuer)
+- Invoices addressed to you (as payer)
+- Invoice status, amounts, and due dates
+- Actions: Pay, Withdraw
+
+### Create Invoice
+
+Navigate to `/invoices/create` to:
+- Set payer address (optional - leave empty for open invoice)
+- Set amount in ETH
+- Set due date (optional)
+- Add metadata (IPFS hash, URI, or description)
+
+### Pay Invoice
+
+From the invoices list, click "Pay" on any unpaid invoice. The payment will:
+- Send ETH to the contract
+- Update the invoice's `paidAmount`
+- Handle overpayments via pull pattern
+
+### Withdraw Funds
+
+As an issuer, click "Withdraw" on paid invoices to:
+- Transfer collected funds to your address
+- Reset the invoice's `paidAmount`
+
+## 🔒 Security Features
+
+- **ReentrancyGuard**: All state-changing functions are protected against reentrancy attacks
+- **Pull Pattern**: Overpayments and refunds use pull pattern (users must call `withdrawPending()`)
+- **Access Control**: Only issuers can withdraw or cancel their invoices
+- **Input Validation**: All functions validate inputs (amount > 0, invoice exists, etc.)
+- **OpenZeppelin**: Uses battle-tested OpenZeppelin contracts
+
+## 🌐 Deployment
+
+### Local Network
+
+```bash
+yarn deploy
+```
+
+### Testnet (Sepolia)
+
+```bash
+# Set your private key in .env
+# DEPLOYER_PRIVATE_KEY=your_private_key
+
+yarn deploy --network sepolia
+```
+
+### Mainnet
+
+```bash
+# Set your private key in .env
+# DEPLOYER_PRIVATE_KEY=your_private_key
+
+yarn deploy --network mainnet
+```
+
+## 📁 Project Structure
+
+```
+smart-billing-contract/
+├── packages/
+│   ├── hardhat/
+│   │   ├── contracts/
+│   │   │   └── InvoiceManager.sol      # Main contract
+│   │   ├── deploy/
+│   │   │   └── 01_deploy_invoice_manager.ts
+│   │   ├── scripts/
+│   │   │   ├── createInvoice.ts
+│   │   │   ├── payInvoice.ts
+│   │   │   └── withdraw.ts
+│   │   └── test/
+│   │       └── InvoiceManager.test.ts
+│   └── nextjs/
+│       ├── app/
+│       │   ├── invoices/
+│       │   │   ├── page.tsx            # Invoice dashboard
+│       │   │   └── create/
+│       │   │       └── page.tsx        # Create invoice form
+│       │   └── page.tsx                # Home page
+│       └── contracts/
+│           └── deployedContracts.ts    # Auto-generated
+├── .github/
+│   └── workflows/
+│       └── ci.yml                      # CI/CD pipeline
+└── README.md
+```
+
+## 🔄 CI/CD
+
+GitHub Actions automatically:
+- Runs tests on push/PR
+- Lints code
+- Builds frontend
+- Supports Node.js 18.x and 20.x
+
+## 📚 Examples
+
+### Example: Create and Pay Invoice
+
+1. **Create Invoice**:
+   ```solidity
+   createInvoice(
+       0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb,  // payer
+       1000000000000000000,                        // 1 ETH
+       1735689600,                                 // due date
+       "ipfs://QmExample123"                       // metadata
+   )
+   ```
+
+2. **Pay Invoice** (partial):
+   ```solidity
+   payInvoice(0)  // Send 0.3 ETH with transaction
+   ```
+
+3. **Pay Remaining**:
+   ```solidity
+   payInvoice(0)  // Send 0.7 ETH with transaction
+   ```
+
+4. **Withdraw** (issuer):
+   ```solidity
+   withdraw(0)  // Transfers 1 ETH to issuer
+   ```
+
+## 🐛 Troubleshooting
+
+### Contract Not Deployed
+
+If you see "Contract not deployed" errors:
+1. Make sure `yarn chain` is running
+2. Run `yarn deploy` to deploy the contract
+3. Check that `deployedContracts.ts` has the contract address
+
+### Tests Failing
+
+- Ensure Hardhat network is running: `yarn chain`
+- Check that OpenZeppelin contracts are installed: `yarn install`
+
+### Frontend Not Loading
+
+- Check that `yarn start` is running
+- Verify contract is deployed: `yarn deploy`
+- Check browser console for errors
+
+## 📄 License
+
+MIT
+
+## 🙏 Acknowledgments
+
+- Built on [Scaffold-ETH 2](https://github.com/scaffold-eth/scaffold-eth-2)
+- Uses [OpenZeppelin Contracts](https://openzeppelin.com/contracts/)
+
+## 🔮 Future Enhancements
+
+- [ ] ERC20 token payment support
+- [ ] Multi-currency invoices
+- [ ] Invoice templates
+- [ ] Recurring invoices
+- [ ] Invoice sharing via QR codes
+- [ ] Integration with payment gateways
+
+## 📞 Support
+
+For issues and questions:
+- Check the [Scaffold-ETH 2 documentation](https://docs.scaffoldeth.io)
+- Open an issue on GitHub
+
+---
+
+**Note**: This is a development version. For production use, ensure proper security audits and testing.
