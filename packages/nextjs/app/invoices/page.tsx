@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useAccount, usePublicClient } from "wagmi";
 import { Address } from "@scaffold-ui/components";
@@ -27,6 +27,8 @@ const InvoicesPage: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [payingInvoiceId, setPayingInvoiceId] = useState<bigint | null>(null);
   const [withdrawingInvoiceId, setWithdrawingInvoiceId] = useState<bigint | null>(null);
+  const prevInvoiceIdsRef = useRef<string>("");
+  const prevEventsKeyRef = useRef<string>("");
 
   const { writeContractAsync: writeInvoiceManager } = useScaffoldWriteContract({
     contractName: "InvoiceManager",
@@ -59,39 +61,90 @@ const InvoicesPage: NextPage = () => {
     watch: true,
   });
 
+  const { data: withdrawnEvents } = useScaffoldEventHistory({
+    contractName: "InvoiceManager",
+    eventName: "InvoiceWithdrawn",
+    watch: true,
+  });
+
   // Combine all invoice IDs
   const allInvoiceIds = useMemo(() => {
     const ids = new Set<bigint>();
-    if (issuerInvoiceIds) {
-      issuerInvoiceIds.forEach((id: bigint) => ids.add(id));
-    }
-    if (payerInvoiceIds) {
-      payerInvoiceIds.forEach((id: bigint) => ids.add(id));
-    }
-    // Also add from events
-    if (createdEvents) {
-      createdEvents.forEach((event: any) => {
-        if (event.args && event.args.id) {
-          ids.add(BigInt(event.args.id.toString()));
-        }
-      });
+    try {
+      if (issuerInvoiceIds && Array.isArray(issuerInvoiceIds)) {
+        issuerInvoiceIds.forEach((id: bigint) => {
+          if (id !== undefined && id !== null) {
+            ids.add(BigInt(id.toString()));
+          }
+        });
+      }
+      if (payerInvoiceIds && Array.isArray(payerInvoiceIds)) {
+        payerInvoiceIds.forEach((id: bigint) => {
+          if (id !== undefined && id !== null) {
+            ids.add(BigInt(id.toString()));
+          }
+        });
+      }
+      // Also add from events
+      if (createdEvents && Array.isArray(createdEvents)) {
+        createdEvents.forEach((event: any) => {
+          if (event?.args?.id) {
+            try {
+              ids.add(BigInt(event.args.id.toString()));
+            } catch (e) {
+              console.error("Error parsing event ID:", e);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error combining invoice IDs:", error);
     }
     return Array.from(ids);
   }, [issuerInvoiceIds, payerInvoiceIds, createdEvents]);
 
+  // Create stable string representation for dependency comparison
+  const invoiceIdsKey = useMemo(() => {
+    return allInvoiceIds.map(id => id.toString()).sort().join(",");
+  }, [allInvoiceIds]);
+
+  // Create stable key from events to trigger refresh when payments/withdrawals happen
+  const eventsKey = useMemo(() => {
+    const paidCount = paidEvents?.length || 0;
+    const withdrawnCount = withdrawnEvents?.length || 0;
+    return `${paidCount}-${withdrawnCount}`;
+  }, [paidEvents?.length, withdrawnEvents?.length]);
+
   // Fetch invoice details
   useEffect(() => {
     const fetchInvoices = async () => {
-      if (!connectedAddress || !publicClient || allInvoiceIds.length === 0) {
+      if (!connectedAddress || !publicClient) {
         setLoading(false);
+        setInvoices([]);
         return;
       }
 
+      // Skip if invoice IDs and events haven't changed
+      const currentKey = `${invoiceIdsKey}-${eventsKey}`;
+      if (currentKey === prevInvoiceIdsRef.current) {
+        return;
+      }
+      
+      prevInvoiceIdsRef.current = currentKey;
+
       try {
         setLoading(true);
-        const { data: deployedContract } = await import("~~/contracts/deployedContracts");
+        const deployedContract = (await import("~~/contracts/deployedContracts")).default;
         const chainId = publicClient.chain?.id;
         if (!chainId || !deployedContract[chainId]?.InvoiceManager) {
+          setLoading(false);
+          setInvoices([]);
+          return;
+        }
+
+        // If no invoice IDs, just set empty array
+        if (allInvoiceIds.length === 0) {
+          setInvoices([]);
           setLoading(false);
           return;
         }
@@ -133,13 +186,14 @@ const InvoicesPage: NextPage = () => {
       } catch (error) {
         console.error("Error fetching invoices:", error);
         toast.error("Failed to load invoices");
+        setInvoices([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchInvoices();
-  }, [connectedAddress, publicClient, allInvoiceIds, createdEvents, paidEvents]);
+  }, [connectedAddress, publicClient, invoiceIdsKey, eventsKey]);
 
   const handlePayInvoice = async (invoiceId: bigint, remainingAmount: bigint) => {
     try {
@@ -150,11 +204,7 @@ const InvoicesPage: NextPage = () => {
         value: remainingAmount,
       });
       toast.success("Payment successful!");
-      // Refresh invoices after a short delay
-      setTimeout(() => {
-        setLoading(true);
-        window.location.reload();
-      }, 2000);
+      // Data will auto-refresh via events
     } catch (error: any) {
       console.error("Payment error:", error);
       toast.error(error?.message || "Payment failed");
@@ -171,8 +221,7 @@ const InvoicesPage: NextPage = () => {
         args: [invoiceId],
       });
       toast.success("Withdrawal successful!");
-      // Refresh invoices
-      setTimeout(() => window.location.reload(), 2000);
+      // Data will auto-refresh via events
     } catch (error: any) {
       console.error("Withdrawal error:", error);
       toast.error(error?.message || "Withdrawal failed");
@@ -224,7 +273,16 @@ const InvoicesPage: NextPage = () => {
             const remaining = invoice.amount - invoice.paidAmount;
             const isIssuer = invoice.issuer.toLowerCase() === connectedAddress.toLowerCase();
             const isPayer = invoice.payer.toLowerCase() === connectedAddress.toLowerCase() || invoice.payer === "0x0000000000000000000000000000000000000000";
-            const canPay = !invoice.cancelled && remaining > 0n && (isPayer || invoice.payer === "0x0000000000000000000000000000000000000000");
+            
+            // Check if invoice was ever fully paid (by checking if it was withdrawn)
+            const wasWithdrawn = withdrawnEvents?.some(
+              (event: any) => event.args?.id?.toString() === invoice.id.toString()
+            ) || false;
+            
+            // If withdrawn, invoice is considered fully paid (even though paidAmount is now 0)
+            const isFullyPaid = wasWithdrawn || remaining === 0n;
+            
+            const canPay = !invoice.cancelled && !isFullyPaid && remaining > 0n && (isPayer || invoice.payer === "0x0000000000000000000000000000000000000000");
             const canWithdraw = isIssuer && invoice.paidAmount > 0n;
 
             return (
@@ -234,40 +292,42 @@ const InvoicesPage: NextPage = () => {
                     <div>
                       <h2 className="card-title">Invoice #{invoice.id.toString()}</h2>
                       <div className="mt-2 space-y-1">
-                        <p>
+                        <div>
                           <span className="font-semibold">Issuer:</span>{" "}
                           <Address address={invoice.issuer} />
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <span className="font-semibold">Payer:</span>{" "}
                           {invoice.payer === "0x0000000000000000000000000000000000000000" ? (
                             <span className="text-accent">Anyone can pay</span>
                           ) : (
                             <Address address={invoice.payer} />
                           )}
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <span className="font-semibold">Amount:</span> {formatEther(invoice.amount)} ETH
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <span className="font-semibold">Paid:</span> {formatEther(invoice.paidAmount)} ETH
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <span className="font-semibold">Remaining:</span> {formatEther(remaining)} ETH
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <span className="font-semibold">Due Date:</span> {formatDate(invoice.dueDate)}
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <span className="font-semibold">Status:</span>{" "}
                           {invoice.cancelled ? (
                             <span className="badge badge-error">Cancelled</span>
-                          ) : remaining === 0n ? (
-                            <span className="badge badge-success">Paid</span>
+                          ) : isFullyPaid ? (
+                            <span className="badge badge-success">
+                              {wasWithdrawn ? "Paid (Withdrawn)" : "Paid"}
+                            </span>
                           ) : (
                             <span className="badge badge-warning">Pending</span>
                           )}
-                        </p>
+                        </div>
                       </div>
                     </div>
                     <div className="card-actions justify-end">
