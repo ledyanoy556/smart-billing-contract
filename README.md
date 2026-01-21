@@ -66,6 +66,64 @@ yarn start
 
 Visit `http://localhost:3000` to interact with the application.
 
+
+## 🛌 User Flow
+
+### After launching the service, you need to connect your wallet:
+
+![screenshot_1](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_1.png)
+
+### Select "MetaMask":
+
+![screenshot_2](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_2.png)
+
+![screenshot_3](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_3.png)
+
+### Using the "Grab funds from faucet" button, we can add +1 ETH to the wallet:
+
+![screenshot_4](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_4.png)
+
+### Go to the list of invoices:
+
+![screenshot_5](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_5.png)
+
+### Create invoice:
+
+![screenshot_6](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_6.png)
+
+### Create an invoice for 1 ETH:
+
+![screenshot_7](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_7.png)
+
+### Confirm the transaction request in MetaMask:
+
+![screenshot_12](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_12.png)
+
+### Pay the invoice:
+
+![screenshot_9](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_8.png)
+
+### Confirm transaction in MetaMask:
+
+![screenshot_10](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_9.png)
+
+### Invoice paid:
+
+![screenshot_11](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_10.png)
+
+### It is possible to withdraw the invoice. Revoke the invoice (Withdraw button):
+
+![screenshot_12](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_11.png)
+
+### Confirm in MetaMask:
+
+![screenshot_13](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_12.png)
+
+### Invoice is withdrawn:
+
+![screenshot_14](https://github.com/ledyanoy556/smart-billing-contract/raw/main/screenshots/screenshot_13.png)
+
+
 ## 📝 Contract API
 
 ### InvoiceManager Contract
